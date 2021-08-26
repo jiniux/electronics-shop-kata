@@ -4,7 +4,7 @@ use crate::utils::CombinationsGetter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ItemOption {
-    price: i32,
+    price: u32,
 }
 
 impl Default for ItemOption {
@@ -27,21 +27,21 @@ impl<'a> AsRef<[ItemOption]> for ItemOptionCategory {
 }
 
 pub trait ToItemOptionCategory<T> {
-    fn to_item_option_category(self) -> ItemOptionCategory;
+    fn to_item_option_category(&self) -> ItemOptionCategory;
 }
 
 pub trait ToItemOption: Copy {
     fn to_item_option(self) -> ItemOption;
 }
 
-impl ToItemOption for i32 {
+impl ToItemOption for u32 {
     fn to_item_option(self) -> ItemOption {
         ItemOption { price: self }
     }
 }
 
 impl<T: ToItemOption, K: AsRef<[T]>> ToItemOptionCategory<T> for K {
-    fn to_item_option_category(self) -> ItemOptionCategory {
+    fn to_item_option_category(&self) -> ItemOptionCategory {
         ItemOptionCategory {
             item_options: self
                 .as_ref()
@@ -56,11 +56,11 @@ impl<T: ToItemOption, K: AsRef<[T]>> ToItemOptionCategory<T> for K {
 #[derive(Debug)]
 pub struct ShopCart {
     item_option_categories: Vec<ItemOptionCategory>,
-    budget: i32,
+    budget: u32,
 }
 
 impl ShopCart {
-    pub fn new(budget: i32) -> Self {
+    pub fn new(budget: u32) -> Self {
         Self {
             item_option_categories: Vec::new(),
             budget,
@@ -72,14 +72,14 @@ impl ShopCart {
             .push(item_category.to_item_option_category())
     }
 
-    fn get_all_combinations<'a>(&self) -> CombinationsGetter<ItemOption> {
+    fn get_all_combinations(&self) -> CombinationsGetter<ItemOption> {
         CombinationsGetter::new(&self.item_option_categories)
     }
 
-    pub fn get_cost(&self) -> i32 {
+    pub fn get_cost(&self) -> i64 {
         self.get_all_combinations()
-            .map(|combination| combination.iter().map(|item| item.price).sum())
-            .filter(|result| *result <= self.budget)
+            .map(|combination| combination.iter().map(|item| item.price).sum::<u32>().into())
+            .filter(|result| *result <= i64::from(self.budget))
             .max()
             .unwrap_or(-1)
     }
@@ -96,9 +96,9 @@ impl TryFrom<&str> for ShopCart {
     type Error = ShopCartParseError;
 
     fn try_from(input: &str) -> Result<Self, Self::Error> {
-        let mut lines = input.split('\n').map(|s| {
+        let mut lines = input.lines().map(|s| {
             s.split_whitespace()
-                .map(|s| s.parse::<i32>().map_err(ShopCartParseError::ParseIntError))
+                .map(|s| s.parse::<u32>().map_err(ShopCartParseError::ParseIntError))
         });
 
         let mut header = lines.next().ok_or(ShopCartParseError::MissingLine)?;
@@ -109,10 +109,10 @@ impl TryFrom<&str> for ShopCart {
         let mut item_option_categories = Vec::new();
 
         for category_length in category_lengths {
-            let data: Result<Vec<i32>, ShopCartParseError> = lines
+            let data: Result<Vec<u32>, ShopCartParseError> = lines
                 .next()
                 .ok_or(ShopCartParseError::MissingLine)?
-                .take(category_length? as usize)
+                .take(usize::try_from(category_length?).unwrap())
                 .collect();
 
             let data = data?;
@@ -137,7 +137,7 @@ mod tests {
     use crate::ShopCart;
     use std::convert::TryFrom;
 
-    fn test_input(input: &str, expected: i32) {
+    fn test_input(input: &str, expected: i64) {
         let shopcart = ShopCart::try_from(
            input,
         )
